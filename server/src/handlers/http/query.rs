@@ -67,12 +67,14 @@ pub struct Query {
 }
 
 pub async fn query(req: HttpRequest, query_request: Query) -> Result<impl Responder, QueryError> {
+    log::warn!("Entered query");
     let session_state = QUERY_SESSION.state();
 
     // get the logical plan and extract the table name
     let raw_logical_plan = session_state
         .create_logical_plan(&query_request.query)
         .await?;
+    log::warn!("Created logical plan");
 
     // create a visitor to extract the table name
     let mut visitor = TableScanVisitor::default();
@@ -80,6 +82,7 @@ pub async fn query(req: HttpRequest, query_request: Query) -> Result<impl Respon
     let stream = visitor
         .top()
         .ok_or_else(|| QueryError::MalformedQuery("Table Name not found in SQL"))?;
+    log::warn!("got stream");
 
     let query_cache_manager = QueryCacheManager::global(CONFIG.parseable.query_cache_size)
         .await
@@ -114,6 +117,7 @@ pub async fn query(req: HttpRequest, query_request: Query) -> Result<impl Respon
     {
         return results.to_http();
     };
+    log::warn!("dealt with cached data");
 
     let tables = visitor.into_inner();
     update_schema_when_distributed(tables).await?;
@@ -130,6 +134,8 @@ pub async fn query(req: HttpRequest, query_request: Query) -> Result<impl Respon
 
     let time = Instant::now();
     let (records, fields) = query.execute(table_name.clone()).await?;
+    log::warn!("Executed query");
+
     // deal with cache saving
     if let Err(err) = put_results_in_cache(
         cache_results,

@@ -123,6 +123,7 @@ async fn create_parquet_physical_plan(
     state: &SessionState,
     time_partition: Option<String>,
 ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
+    log::warn!("creating physical plan with ObjectStoreUrl= {object_store_url:?}"); // why is path '/'?
     let filters = if let Some(expr) = conjunction(filters.to_vec()) {
         let table_df_schema = schema.as_ref().clone().to_dfschema()?;
         let filters = create_physical_expr(&expr, &table_df_schema, state.execution_props())?;
@@ -143,7 +144,15 @@ async fn create_parquet_physical_plan(
         },
     };
     let file_format = ParquetFormat::default().with_enable_pruning(true);
+    log::warn!("parquet file_format- {file_format:?}");
 
+    log::warn!("file_schema- {:?}",schema.clone());
+    log::warn!("file_groups- {partitions:?}");
+    log::warn!("statistics- {statistics:?}");
+    log::warn!("projection- {:?}",projection.clone());
+    log::warn!("limit- {limit:?}");
+    log::warn!("filters- {filters:?}");
+    log::warn!("SesionState- {state:?}");
     // create the execution plan
     let plan = file_format
         .create_physical_plan(
@@ -230,6 +239,8 @@ fn partitioned_files(
             columns,
             ..
         } = file;
+        log::warn!("OG file_path- {file_path}");
+        // let file_path = file_path.replace("\\","/");
         partitioned_files[index].push(PartitionedFile::new(file_path, file.file_size));
         columns.into_iter().for_each(|col| {
             column_statistics
@@ -322,6 +333,7 @@ impl TableProvider for StandardTableProvider {
                 );
             }
         };
+        log::warn!("memory_exec- {memory_exec:?}");
         let mut merged_snapshot: snapshot::Snapshot = Snapshot::default();
         if CONFIG.parseable.mode == Mode::Query {
             let path = RelativePathBuf::from_iter([&self.stream, STREAM_ROOT_DIRECTORY]);
@@ -346,6 +358,7 @@ impl TableProvider for StandardTableProvider {
         } else {
             merged_snapshot = object_store_format.snapshot;
         }
+        log::warn!("merged_snapshot- {merged_snapshot:?}");
 
         // Is query timerange is overlapping with older data.
         if is_overlapping_query(&merged_snapshot.manifest_list, &time_filters) {
@@ -373,7 +386,7 @@ impl TableProvider for StandardTableProvider {
             limit,
         )
         .await?;
-
+        log::warn!("manifest_files- {manifest_files:?}");
         if manifest_files.is_empty() {
             return final_plan(vec![memory_exec], projection, self.schema.clone());
         }
@@ -426,6 +439,8 @@ impl TableProvider for StandardTableProvider {
         }
 
         let (partitioned_files, statistics) = partitioned_files(manifest_files, &self.schema, 1);
+        log::warn!("partitioned_files- {partitioned_files:?}\nstatistics- {statistics:?}");
+        log::warn!("glob_storage.store_url()- {}",glob_storage.store_url());
         let remote_exec = create_parquet_physical_plan(
             ObjectStoreUrl::parse(&glob_storage.store_url()).unwrap(),
             partitioned_files,
@@ -438,7 +453,7 @@ impl TableProvider for StandardTableProvider {
             time_partition.clone(),
         )
         .await?;
-
+        log::warn!("remote_exec- {remote_exec:?}");
         Ok(final_plan(
             vec![memory_exec, cache_exec, Some(remote_exec)],
             projection,
@@ -500,6 +515,8 @@ fn final_plan(
     schema: Arc<Schema>,
 ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
     let mut execution_plans = execution_plans.into_iter().flatten().collect_vec();
+    execution_plans.iter()
+        .for_each(|e| log::warn!("execution_plan- {e:?}"));
 
     let exec: Arc<dyn ExecutionPlan> = if execution_plans.is_empty() {
         let schema = match projection {

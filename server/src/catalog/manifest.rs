@@ -92,6 +92,9 @@ pub fn create_from_parquet_file(
     object_store_path: String,
     fs_file_path: &std::path::Path,
 ) -> anyhow::Result<File> {
+    log::warn!("create_from_parquet_file-\nfs_file_path- {fs_file_path:?}\nobject_store_path- {object_store_path}");
+    // let object_store_path = object_store_path.replace("\\", "/");
+    // let fs_file_path = fs_file_path.to_str().unwrap().replace("\\", "/");
     let mut manifest_file = File {
         file_path: object_store_path,
         ..File::default()

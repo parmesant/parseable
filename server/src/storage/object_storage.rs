@@ -451,7 +451,7 @@ pub trait ObjectStorage: Sync + 'static {
                 }
             }
             let parquet_files = dir.parquet_files();
-
+            log::warn!("parquet_files- {parquet_files:?}");
             for file in parquet_files {
                 let filename = file
                     .file_name()
@@ -480,11 +480,16 @@ pub trait ObjectStorage: Sync + 'static {
                     file_suffix =
                         str::replacen(filename, ".", "/", 3 + custom_partition_list.len());
                 }
+                // why are we replacing 
                 let stream_relative_path = format!("{stream}/{file_suffix}");
+                log::warn!("replace stream_relative_path- {stream_relative_path}");
+                // let stream_relative_path = stream_relative_path.replace("\\", "/");
                 self.upload_file(&stream_relative_path, &file).await?;
                 let absolute_path = self
                     .absolute_url(RelativePath::from_path(&stream_relative_path).unwrap())
                     .to_string();
+                log::warn!("replace absolute_path- {absolute_path}");
+                // let absolute_path = absolute_path.replace("\\","/");
                 let store = CONFIG.storage().get_object_store();
                 let manifest =
                     catalog::create_from_parquet_file(absolute_path.clone(), &file).unwrap();

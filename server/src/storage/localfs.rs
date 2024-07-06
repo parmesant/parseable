@@ -71,6 +71,7 @@ impl ObjectStorageProvider for FSConfig {
     }
 
     fn get_endpoint(&self) -> String {
+        // self.root.to_str().unwrap().replace("\\", "/").to_string()
         self.root.to_str().unwrap().to_string()
     }
 
@@ -79,6 +80,7 @@ impl ObjectStorageProvider for FSConfig {
     }
 }
 
+#[derive(Debug)]
 pub struct LocalFS {
     // absolute path of the data directory
     root: PathBuf,
@@ -90,13 +92,15 @@ impl LocalFS {
     }
 
     pub fn path_in_root(&self, path: &RelativePath) -> PathBuf {
-        path.to_path(&self.root)
+        // log::warn!("replacing \\ with  / for LocalFS path- {path:?}\tself.root- {:?}",self.root);
+        path.to_path(&self.root) //.to_str().unwrap().replace("\\", "/").into()
     }
 }
 
 #[async_trait]
 impl ObjectStorage for LocalFS {
     async fn get_object(&self, path: &RelativePath) -> Result<Bytes, ObjectStorageError> {
+        // log::warn!("get_object {self:?}\tpath- {path:?}");
         let time = Instant::now();
         let file_path = self.path_in_root(path);
         let res: Result<Bytes, ObjectStorageError> = match fs::read(file_path).await {
@@ -141,7 +145,7 @@ impl ObjectStorage for LocalFS {
                 );
             }
         }
-
+        log::warn!("get_ingestor_meta_file_paths {self:?}\tpath_arr- {path_arr:?}");
         let time = time.elapsed().as_secs_f64();
         REQUEST_RESPONSE_TIME
             .with_label_values(&["GET", "200"]) // this might not be the right status code
@@ -251,14 +255,14 @@ impl ObjectStorage for LocalFS {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).await?;
         }
-        let res = fs::write(path, resource).await;
+        let res = fs::write(path, resource.clone()).await;
 
         let status = if res.is_ok() { "200" } else { "400" };
         let time = time.elapsed().as_secs_f64();
         REQUEST_RESPONSE_TIME
             .with_label_values(&["PUT", status])
             .observe(time);
-
+        // log::warn!("put_object {self:?}\tresource- {:?}",String::from_utf8(resource.to_vec()));
         res.map_err(Into::into)
     }
 
@@ -392,6 +396,8 @@ impl ObjectStorage for LocalFS {
     }
 
     async fn upload_file(&self, key: &str, path: &Path) -> Result<(), ObjectStorageError> {
+        log::warn!("upload_file self- {self:?}\nkey- {key}\npath- {path:?}");
+        // let path = path.to_str().unwrap().replace("\\", "/");
         let op = CopyOptions {
             overwrite: true,
             skip_exist: true,
@@ -399,8 +405,10 @@ impl ObjectStorage for LocalFS {
         };
         let to_path = self.root.join(key);
         if let Some(path) = to_path.parent() {
+            // let path = path.to_str().unwrap().replace("\\", "/");
             fs::create_dir_all(path).await?;
         }
+        // let to_path = to_path.to_str().unwrap().replace("\\", "/");
         let _ = fs_extra::file::copy(path, to_path, &op)?;
         Ok(())
     }

@@ -35,7 +35,7 @@ pub const DEFAULT_TIMESTAMP_KEY: &str = "p_timestamp";
 pub const DEFAULT_TAGS_KEY: &str = "p_tags";
 pub const DEFAULT_METADATA_KEY: &str = "p_metadata";
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Event {
     pub stream_name: String,
     pub rb: RecordBatch,
@@ -66,6 +66,7 @@ impl Event {
 
         let num_rows = self.rb.num_rows() as u64;
         if self.is_first_event {
+            // log::warn!("first_event for stream- {}\nschema- {:?}",self.stream_name, self.rb.schema());
             commit_schema(&self.stream_name, self.rb.schema())?;
         }
 
@@ -76,7 +77,8 @@ impl Event {
             self.parsed_timestamp,
             &self.custom_partition_values,
         )?;
-
+        // log::warn!("processed event {:?}",self);
+        
         metadata::STREAM_INFO.update_stats(
             &self.stream_name,
             self.origin_format,

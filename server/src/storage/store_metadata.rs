@@ -67,6 +67,10 @@ pub struct StorageMetadata {
 
 impl StorageMetadata {
     pub fn new() -> Self {
+        log::warn!("Creating StorageMetadata");
+        log::warn!("CONFIG- {CONFIG:?}");
+        log::warn!("CONFIG staging- {:?}",CONFIG.staging_dir());
+        log::warn!("CONFIG storage- {:?}",CONFIG.storage());
         Self {
             version: CURRENT_STORAGE_METADATA_VERSION.to_string(),
             mode: CONFIG.storage_name.to_owned(),

@@ -67,7 +67,7 @@ impl Query {
         let runtime_config = storage
             .get_datafusion_runtime()
             .with_disk_manager(DiskManagerConfig::NewOs);
-
+        log::warn!("runtime_config.storage- {storage:?}");
         let (pool_size, fraction) = match CONFIG.parseable.query_memory_pool_size {
             Some(size) => (size, 1.),
             None => {
@@ -112,7 +112,7 @@ impl Query {
         let df = QUERY_SESSION
             .execute_logical_plan(self.final_logical_plan(&time_partition))
             .await?;
-
+        log::warn!("create dataframe for the query session {df:?}");
         let fields = df
             .schema()
             .fields()
@@ -120,17 +120,20 @@ impl Query {
             .map(|f| f.name())
             .cloned()
             .collect_vec();
-
+        // log::warn!("created fields");
         if fields.is_empty() {
             return Ok((vec![], fields));
         }
 
         let results = df.collect().await?;
+        // log::warn!("created results");
         Ok((results, fields))
     }
 
     /// return logical plan with all time filters applied through
     fn final_logical_plan(&self, time_partition: &Option<String>) -> LogicalPlan {
+        log::warn!("Inside final_logical_plan");
+        log::warn!("self- {self:?}");
         let filters = self.filter_tag.clone().and_then(tag_filter);
         // see https://github.com/apache/arrow-datafusion/pull/8400
         // this can be eliminated in later version of datafusion but with slight caveat

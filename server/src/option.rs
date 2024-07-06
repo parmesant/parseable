@@ -53,17 +53,20 @@ Log Lake for the cloud-native world
             .subcommand_required(true)
             .color(clap::ColorChoice::Always)
             .get_matches();
-
+        log::warn!("create_parseable_cli_command- {cli:?}");
         match cli.subcommand() {
             Some(("local-store", m)) => {
+                // log::warn!("ArgMatches m- {m:?}");
                 let cli = match Cli::from_arg_matches(m) {
                     Ok(cli) => cli,
                     Err(err) => err.exit(),
                 };
+                // log::warn!("cli- {cli:?}");
                 let storage = match FSConfig::from_arg_matches(m) {
                     Ok(storage) => storage,
                     Err(err) => err.exit(),
                 };
+                log::warn!("storage- {storage:?}");
 
                 if cli.local_staging_path == storage.root {
                     create_parseable_cli_command()
@@ -185,8 +188,9 @@ Log Lake for the cloud-native world
 
 fn create_parseable_cli_command() -> Command {
     let local = Cli::create_cli_command_with_clap("local-store");
+    log::warn!("create_parseable_cli_command local- {local:?}");
     let local = <FSConfig as Args>::augment_args_for_update(local);
-
+    log::warn!("create_parseable_cli_command <FSConfig as Args> local- {local:?}");
     let local = local
         .mut_arg(Cli::USERNAME, |arg| {
             arg.required(false).default_value(Cli::DEFAULT_USERNAME)
@@ -309,7 +313,8 @@ pub mod validation {
             env::current_dir()?.join(path)
         }
         .clean();
-
+        // let absolute_path = absolute_path.to_str().unwrap().replace("\\", "/");
+        // Ok(PathBuf::from(absolute_path))
         Ok(absolute_path)
     }
 

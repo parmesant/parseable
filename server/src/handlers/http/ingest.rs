@@ -151,6 +151,7 @@ async fn flatten_and_push_logs(
     if let Some((_, log_source)) = req.headers().iter().find(|&(key, _)| key == LOG_SOURCE_KEY) {
         let mut json: Vec<BTreeMap<String, Value>> = Vec::new();
         let log_source: String = log_source.to_str().unwrap().to_owned();
+        log::warn!("log_source- {log_source}");
         match log_source.as_str() {
             LOG_SOURCE_KINESIS => json = kinesis::flatten_kinesis_logs(&body),
             LOG_SOURCE_OTEL => {
@@ -175,6 +176,7 @@ async fn flatten_and_push_logs(
 // only ingests events into the specified logstream
 // fails if the logstream does not exist
 pub async fn post_event(req: HttpRequest, body: Bytes) -> Result<HttpResponse, PostError> {
+    log::warn!("post_event!");
     let stream_name: String = req.match_info().get("logstream").unwrap().parse().unwrap();
     if stream_name.eq(INTERNAL_STREAM_NAME) {
         return Err(PostError::Invalid(anyhow::anyhow!(
@@ -206,6 +208,7 @@ pub async fn push_logs_unchecked(
 }
 
 async fn push_logs(stream_name: String, req: HttpRequest, body: Bytes) -> Result<(), PostError> {
+    log::warn!("push_logs\nstream_name- {stream_name}");
     let time_partition = STREAM_INFO.get_time_partition(&stream_name)?;
     let time_partition_limit = STREAM_INFO.get_time_partition_limit(&stream_name)?;
     let static_schema_flag = STREAM_INFO.get_static_schema_flag(&stream_name)?;

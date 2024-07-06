@@ -117,6 +117,9 @@ impl StorageDir {
         let mut filename =
             Self::filename_by_current_time(stream_hash, parsed_timestamp, custom_partition_values);
         filename = format!("{}{}", server_time_in_min, filename);
+        // let p = self.data_path.join(filename);
+        // let absolute_path = p.as_os_str().to_str().unwrap().replace("\\", "/");
+        // PathBuf::from(absolute_path)
         self.data_path.join(filename)
     }
 
@@ -169,6 +172,7 @@ impl StorageDir {
         let random_string =
             rand::distributions::Alphanumeric.sample_string(&mut rand::thread_rng(), 15);
         for arrow_file_path in arrow_files {
+            // let arrow_file_path: PathBuf = arrow_file_path.to_str().unwrap().replace("\\","/").into();
             if arrow_file_path.metadata().unwrap().len() == 0 {
                 log::error!(
                     "Invalid arrow file {:?} detected for stream {}, removing it",
@@ -188,6 +192,7 @@ impl StorageDir {
     }
 
     pub fn parquet_files(&self) -> Vec<PathBuf> {
+        // log::warn!("parquet_files()- {self:?}");
         let Ok(dir) = self.data_path.read_dir() else {
             return vec![];
         };
@@ -351,7 +356,7 @@ pub fn parquet_writer_props(
 
 pub fn get_ingestor_info() -> anyhow::Result<IngestorMetadata> {
     let path = PathBuf::from(&CONFIG.parseable.local_staging_path);
-
+    log::warn!("get_ingestor_info CONFIG- {CONFIG:?}");
     // all the files should be in the staging directory root
     let entries = std::fs::read_dir(path)?;
     let url = get_url();
