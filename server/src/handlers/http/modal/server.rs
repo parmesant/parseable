@@ -24,6 +24,7 @@ use crate::handlers::http::base_path;
 use crate::handlers::http::cache;
 use crate::handlers::http::health_check;
 use crate::handlers::http::query;
+use crate::handlers::http::panorama;
 use crate::handlers::http::users::dashboards;
 use crate::handlers::http::users::filters;
 use crate::handlers::http::API_BASE_PATH;
@@ -148,10 +149,16 @@ impl Server {
                     .service(Self::get_filters_webscope())
                     .service(Self::get_llm_webscope())
                     .service(Self::get_oauth_webscope(oidc_client))
-                    .service(Self::get_user_role_webscope()),
+                    .service(Self::get_user_role_webscope())
+                    .service(Self::get_panorama_factory()),
             )
             .service(Self::get_ingest_otel_factory())
             .service(Self::get_generated());
+    }
+
+    // get the panorama factory
+    pub fn get_panorama_factory() -> Resource {
+        web::resource("/panorama").route(web::post().to(query::query).authorize(Action::Query))
     }
 
     // get the dashboards web scope

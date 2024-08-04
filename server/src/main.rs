@@ -43,6 +43,7 @@ mod sync;
 mod users;
 mod utils;
 mod validator;
+mod panorama;
 
 use std::sync::Arc;
 
