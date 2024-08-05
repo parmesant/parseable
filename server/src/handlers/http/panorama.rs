@@ -16,6 +16,10 @@
  *
  */
 
+use std::borrow::Borrow;
+use std::collections::HashMap;
+use std::pin::Pin;
+use futures_util::Future;
 use actix_web::http::header::ContentType;
 use actix_web::web::{self, Json};
 use actix_web::{FromRequest, HttpRequest, Responder};
@@ -37,14 +41,14 @@ pub struct PanoramaHttp {
 
 /// This function is the API call
 /// Assume that the PanoramaHttp object contains the required parameters
-pub fn detect_anomaly(
+pub async fn detect_anomaly(
     req: HttpRequest,
     query_request: PanoramaHttp
 ) -> Result<impl Responder, PanoramaError> {
 
     Python::with_gil(|py| {
-        let panorama_state = PANORAMA_STATIC.get(py).unwrap();
-        panorama_state.detect_anomaly("SomeStream".to_owned(), DateTime::from_timestamp_nanos(129491), DateTime::from_timestamp_nanos(129492)).unwrap();
+        let panorama_state = PANORAMA_STATIC.borrow();
+        panorama_state.detect_anomaly(py, "SomeStream".to_owned(), DateTime::from_timestamp_nanos(129491), DateTime::from_timestamp_nanos(129492)).unwrap();
 
     });
     
@@ -53,10 +57,26 @@ pub fn detect_anomaly(
 }
 
 
+impl FromRequest for PanoramaHttp {
+    type Error = actix_web::Error;
+    type Future = Pin<Box<dyn Future<Output = Result<Self, Self::Error>>>>;
 
+    fn from_request(req: &HttpRequest, payload: &mut actix_web::dev::Payload) -> Self::Future {
+        let query = Json::<PanoramaHttp>::from_request(req, payload);
+        let params = web::Query::<HashMap<String, bool>>::from_request(req, payload)
+            .into_inner()
+            .map(|x| x.0)
+            .unwrap_or_default();
 
+        let fut = async move {
+            let mut query = query.await?.into_inner();
 
+            Ok(query)
+        };
 
+        Box::pin(fut)
+    }
+}
 
 
 

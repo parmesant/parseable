@@ -158,7 +158,7 @@ impl Server {
 
     // get the panorama factory
     pub fn get_panorama_factory() -> Resource {
-        web::resource("/panorama").route(web::post().to(query::query).authorize(Action::Query))
+        web::resource("/panorama").route(web::post().to(panorama::detect_anomaly).authorize(Action::Query))
     }
 
     // get the dashboards web scope
