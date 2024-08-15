@@ -28,10 +28,15 @@ use futures::{StreamExt, TryStreamExt};
 use object_store::aws::{AmazonS3, AmazonS3Builder, AmazonS3ConfigKey, Checksum};
 use object_store::limit::LimitStore;
 use object_store::path::Path as StorePath;
-use object_store::{ClientOptions, ObjectStore, PutPayload};
+use object_store::{ClientOptions, ObjectStore, PutPayload, WriteMultipart};
 use relative_path::{RelativePath, RelativePathBuf};
+use tokio::fs::OpenOptions;
+use tokio::io::AsyncReadExt;
+use tokio::sync::Mutex;
+use tokio::task::JoinSet;
 
 use std::collections::BTreeMap;
+use std::io::{BufReader, Read};
 use std::iter::Iterator;
 use std::path::Path as StdPath;
 use std::sync::Arc;
@@ -377,18 +382,23 @@ impl S3 {
         let instant = Instant::now();
 
         // // TODO: Uncomment this when multipart is fixed
-        // let should_multipart = std::fs::metadata(path)?.len() > MULTIPART_UPLOAD_SIZE as u64;
-
-        let should_multipart = false;
+        let should_multipart = std::fs::metadata(path)?.len() > MULTIPART_UPLOAD_SIZE as u64;
+        let file_size = std::fs::metadata(path)?.len();
+        log::warn!("file name- {path:?}\nfile length- {}\nMULTIPART_UPLOAD_SIZE- {}\n", file_size ,MULTIPART_UPLOAD_SIZE);
+        // let should_multipart = false;
 
         let res = if should_multipart {
-            // self._upload_multipart(key, path).await
+            self._upload_multipart(key, path).await?;
             // this branch will never get executed
             Ok(())
         } else {
+            let start = std::time::SystemTime::now();
             let bytes = tokio::fs::read(path).await?;
             let result = self.client.put(&key.into(), bytes.into()).await?;
-            log::info!("Uploaded file to S3: {:?}", result);
+            log::warn!("Uploaded file to S3: {:?}", result);
+            let end = std::time::SystemTime::now();
+            let duration = end.duration_since(start).unwrap().as_millis();
+            log::warn!("{duration}ms for _upload_file");
             Ok(())
         };
 
@@ -402,47 +412,165 @@ impl S3 {
     }
 
     // TODO: introduce parallel, multipart-uploads if required
-    // async fn _upload_multipart(&self, key: &str, path: &StdPath) -> Result<(), ObjectStorageError> {
-    //     let mut buf = vec![0u8; MULTIPART_UPLOAD_SIZE / 2];
-    //     let mut file = OpenOptions::new().read(true).open(path).await?;
+    async fn _upload_multipart(&self, key: &str, path: &StdPath) -> Result<(), ObjectStorageError> {
+        let start = std::time::SystemTime::now();
+        let mut buf = vec![0u8; MULTIPART_UPLOAD_SIZE / 4];
+        // let mut file = OpenOptions::new().read(true).open(path).await?;
 
-    //     // let (multipart_id, mut async_writer) = self.client.put_multipart(&key.into()).await?;
-    //     let mut async_writer = self.client.put_multipart(&key.into()).await?;
+        // // let (multipart_id, mut async_writer) = self.client.put_multipart(&key.into()).await?;
+        // let async_writer = Arc::new(Mutex::new(self.client.put_multipart(&key.into()).await?));
+        
+        /* `abort_multipart()` has been removed */
+        // let close_multipart = |err| async move {
+        //     log::error!("multipart upload failed. {:?}", err);
+        //     self.client
+        //         .abort_multipart(&key.into(), &multipart_id)
+        //         .await
+        // };
 
-    //     /* `abort_multipart()` has been removed */
-    //     // let close_multipart = |err| async move {
-    //     //     log::error!("multipart upload failed. {:?}", err);
-    //     //     self.client
-    //     //         .abort_multipart(&key.into(), &multipart_id)
-    //     //         .await
-    //     // };
+        // let mut multipart_task_vec = Vec::new();
+        // let multipart_task_vec = FuturesUnordered::new();
 
-    //     loop {
-    //         match file.read(&mut buf).await {
-    //             Ok(len) => {
-    //                 if len == 0 {
-    //                     break;
-    //                 }
-    //                 if let Err(err) = async_writer.write_all(&buf[0..len]).await {
-    //                     // close_multipart(err).await?;
-    //                     break;
-    //                 }
-    //                 if let Err(err) = async_writer.flush().await {
-    //                     // close_multipart(err).await?;
-    //                     break;
-    //                 }
-    //             }
-    //             Err(err) => {
-    //                 // close_multipart(err).await?;
-    //                 break;
-    //             }
-    //         }
-    //     }
+        // let mut all_file_parts = Vec::new();
 
-    //     async_writer.shutdown().await?;
+        // // first, read all the file parts (buf) into a vector
+        // loop {
+        //     match file.read(&mut buf).await {
+        //         Ok(len) => {
+        //             if len == 0 {
+        //                 break;
+        //             }
+        //             let data = buf.clone();
+        //             all_file_parts.push(data);
+        //         },
+        //         Err(e) => {
 
-    //     Ok(())
-    // }
+        //         }
+        //     }
+        // }
+
+        
+        // try WriteMultipart
+        let mut write = WriteMultipart::new_with_chunk_size(self.client.put_multipart(&key.into()).await?, MULTIPART_UPLOAD_SIZE/4);
+        let file = std::fs::File::open(path)?;
+        let mut reader = BufReader::new(file);
+        log::warn!("opened file and created writer");
+        // Note:
+        //  1. write.write() is sync but a worker thread is spawned internally.
+        //  2. write.finish() will wait for all the worker threads to finish.
+        while let Ok(bytes_read) = reader.read(&mut buf) {
+            if bytes_read == 0 {
+                break;
+            }
+            let buffer = &buf[..bytes_read];
+            write.write(buffer); // 1. write.write() is sync but a worker thread is spawned internally.
+        }
+        log::warn!("wrote buffers to WriteMultipart");
+        write
+            .finish() //  2. write.finish() will wait for all the worker threads to finish.
+            .await
+            .map_err(|e| ObjectStorageError::Custom(format!("Failed to finish upload: {e}")))?;
+        log::warn!("finished writing");
+
+
+        // // now spawn tasks to write the file parts
+        // let mut set = JoinSet::new();
+        // for data in all_file_parts {
+        //     let writer = Arc::clone(&async_writer);
+        //     set.spawn(async move{
+        //         let mut w = writer.lock().await;
+        //         w.put_part((data).into())
+        //             .await
+        //             .expect("Could not upload part");
+        //     });
+        //     // let handle = tokio::spawn( async move {
+        //     //     let mut w = writer.lock().await;
+        //     //     w.put_part((data).into())
+        //     //         .await
+        //     //         .expect("Could not upload part");
+        //     // });
+        //     // multipart_task_vec.push(handle);
+        // }
+
+        // while let Some(res) = set.join_next().await {
+        //     res.expect("Could not join future");
+        // }
+
+        // // loop {
+        // //     match file.read(&mut buf).await {
+        // //         Ok(len) => {
+        // //             if len == 0 {
+        // //                 break;
+        // //             }
+        // //             let writer = Arc::clone(&async_writer);
+        // //             let data = buf.clone();
+                    
+        // //             let handle = tokio::spawn(async move {
+        // //                 let mut w = writer.lock().await;
+        // //                 w.put_part((data).into())
+        // //                     .await
+        // //                     .expect("Could not upload part");
+                            
+        // //                 // if let Err(err) = async_writer.put_part((&buf[0..len]).into()).await {
+        // //                 //     break;
+        // //                 // }
+        // //             });
+        // //             multipart_task_vec.push(handle);
+        // //             // let data = buf.clone();
+        // //             // let part_future = async_writer.put_part(data.into());
+        // //             // multipart_task_vec.push(part_future);
+        // //         }
+        // //         Err(err) => {
+        // //             // close_multipart(err).await?;
+        // //             break;
+        // //         }
+        // //     }
+        // // }
+
+        // // futures::future::try_join_all(multipart_task_vec)
+        // //     .await
+        // //     .expect("Could not join future");
+
+        // // let res: Vec<_> = multipart_task_vec.collect().await;
+        // // for part in res {
+        // //     part.expect("Could not upload part")
+        // // }
+
+        
+        // Arc::clone(&async_writer).lock()
+        //     .await
+        //     .complete()
+        //     .await
+        //     .expect("Unable to complete the multipart upload");
+
+        // // loop {
+        // //     match file.read(&mut buf).await {
+        // //         Ok(len) => {
+        // //             if len == 0 {
+        // //                 break;
+        // //             }
+        // //             if let Err(err) = async_writer.write_all(&buf[0..len]).await {
+        // //                 // close_multipart(err).await?;
+        // //                 break;
+        // //             }
+        // //             if let Err(err) = async_writer.flush().await {
+        // //                 // close_multipart(err).await?;
+        // //                 break;
+        // //             }
+        // //         }
+        // //         Err(err) => {
+        // //             // close_multipart(err).await?;
+        // //             break;
+        // //         }
+        // //     }
+        // // }
+
+        // // async_writer.shutdown().await?;
+        let end = std::time::SystemTime::now();
+        let duration = end.duration_since(start).unwrap().as_millis();
+        log::warn!("{duration}ms for _upload_multipart");
+        Ok(())
+    }
 }
 
 #[async_trait]
