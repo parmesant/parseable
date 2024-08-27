@@ -23,6 +23,7 @@ use crate::handlers::http::about;
 use crate::handlers::http::base_path;
 use crate::handlers::http::cache;
 use crate::handlers::http::health_check;
+use crate::handlers::http::panorama;
 use crate::handlers::http::query;
 use crate::handlers::http::trino;
 use crate::handlers::http::users::dashboards;
@@ -197,6 +198,7 @@ impl Server {
                     // POST "/query" ==> Get results of the SQL query passed in request body
                     .service(Self::get_query_factory())
                     .service(Self::get_trino_factory())
+                    .service(Self::get_panorama_factory())
                     .service(Self::get_cache_webscope())
                     .service(Self::get_ingest_factory())
                     .service(Self::get_liveness_factory())
@@ -276,19 +278,30 @@ impl Server {
                     .route(web::get().to(filters::list).authorize(Action::ListFilter)),
             )
             .service(
-                web::resource("/{filter_id}")
-                    .route(web::get().to(filters::get).authorize(Action::GetFilter))
-                    .route(
-                        web::delete()
-                            .to(filters::delete)
-                            .authorize(Action::DeleteFilter),
-                    )
-                    .route(
-                        web::put()
-                            .to(filters::update)
-                            .authorize(Action::CreateFilter),
-                    ),
+                web::scope("/filter").service(
+                    web::resource("/{filter_id}")
+                        .route(web::get().to(filters::get).authorize(Action::GetFilter))
+                        .route(
+                            web::delete()
+                                .to(filters::delete)
+                                .authorize(Action::DeleteFilter),
+                        )
+                        .route(
+                            web::put()
+                                .to(filters::update)
+                                .authorize(Action::CreateFilter),
+                        ),
+                ),
             )
+    }
+
+    pub fn get_panorama_factory() -> Resource {
+        // TODO: Create auth level for panorama
+        web::resource("/panorama").route(
+            web::post()
+                .to(panorama::panorama_function)
+                .authorize(Action::Query),
+        )
     }
 
     // get the query factory
