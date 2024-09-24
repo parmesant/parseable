@@ -18,6 +18,7 @@
 
 use crate::catalog::manifest::File;
 use crate::hottier::HotTierManager;
+use crate::metadata::LogStreamMetadata;
 use crate::Mode;
 use crate::{
     catalog::snapshot::{self, Snapshot},
@@ -82,6 +83,21 @@ pub struct GlobalSchemaProvider {
 impl SchemaProvider for GlobalSchemaProvider {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    #[allow(unused_variables)]
+    fn register_table(
+        &self,
+        name: String,
+        table: Arc<dyn TableProvider>,
+    ) -> Result<Option<Arc<dyn TableProvider>>, DataFusionError> {
+        if self.table_exist(&name) {
+            return Err(DataFusionError::External("Table already exists".into()))
+        }
+        let mut map = STREAM_INFO.write().unwrap();
+        map.insert(name, LogStreamMetadata::default());
+        Ok(None)
+        // exec_err!("schema provider does not support registering tables")
     }
 
     fn table_names(&self) -> Vec<String> {
@@ -217,6 +233,7 @@ async fn collect_from_snapshot(
 fn partitioned_files(
     manifest_files: Vec<catalog::manifest::File>,
     table_schema: &Schema,
+    // target_partition: usize,
 ) -> (Vec<Vec<PartitionedFile>>, datafusion::common::Statistics) {
     let target_partition = num_cpus::get();
     let mut partitioned_files = Vec::from_iter((0..target_partition).map(|_| Vec::new()));
@@ -286,6 +303,48 @@ impl TableProvider for StandardTableProvider {
     fn table_type(&self) -> TableType {
         TableType::Base
     }
+
+    // fn supports_filters_pushdown(&self, filters: &[&Expr]) -> Result<Vec<TableProviderFilterPushDown>> {
+    //     let support: Vec<_> = filters.iter().map(|expr| {
+    //         match expr {
+    //             Expr::Alias(alias) => todo!(),
+    //             Expr::Column(column) => todo!(),
+    //             Expr::ScalarVariable(data_type, vec) => todo!(),
+    //             Expr::Literal(scalar_value) => todo!(),
+    //             Expr::BinaryExpr(binary_expr) => todo!(),
+    //             Expr::Like(like) => todo!(),
+    //             Expr::SimilarTo(like) => todo!(),
+    //             Expr::Not(expr) => todo!(),
+    //             Expr::IsNotNull(expr) => todo!(),
+    //             Expr::IsNull(expr) => todo!(),
+    //             Expr::IsTrue(expr) => todo!(),
+    //             Expr::IsFalse(expr) => todo!(),
+    //             Expr::IsUnknown(expr) => todo!(),
+    //             Expr::IsNotTrue(expr) => todo!(),
+    //             Expr::IsNotFalse(expr) => todo!(),
+    //             Expr::IsNotUnknown(expr) => todo!(),
+    //             Expr::Negative(expr) => todo!(),
+    //             Expr::Between(between) => todo!(),
+    //             Expr::Case(case) => todo!(),
+    //             Expr::Cast(cast) => todo!(),
+    //             Expr::TryCast(try_cast) => todo!(),
+    //             Expr::Sort(sort) => todo!(),
+    //             Expr::ScalarFunction(scalar_function) => todo!(),
+    //             Expr::AggregateFunction(aggregate_function) => todo!(),
+    //             Expr::WindowFunction(window_function) => todo!(),
+    //             Expr::InList(in_list) => todo!(),
+    //             Expr::Exists(exists) => todo!(),
+    //             Expr::InSubquery(in_subquery) => todo!(),
+    //             Expr::ScalarSubquery(subquery) => todo!(),
+    //             Expr::Wildcard { qualifier } => todo!(),
+    //             Expr::GroupingSet(grouping_set) => todo!(),
+    //             Expr::Placeholder(placeholder) => todo!(),
+    //             Expr::OuterReferenceColumn(data_type, column) => todo!(),
+    //             Expr::Unnest(unnest) => todo!(),
+    //         }
+    //     }).collect();
+    //     Ok(support)
+    // }
 
     async fn scan(
         &self,

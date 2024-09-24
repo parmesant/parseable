@@ -83,7 +83,7 @@ impl Query {
 
         let mut config = SessionConfig::default()
             .with_parquet_pruning(true)
-            .with_prefer_existing_sort(true)
+            .with_prefer_existing_sort(false)
             .with_round_robin_repartition(true);
 
         // For more details refer https://datafusion.apache.org/user-guide/configs.html

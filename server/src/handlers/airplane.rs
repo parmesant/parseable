@@ -135,7 +135,7 @@ impl FlightService for AirServiceImpl {
 
         let ticket = get_query_from_ticket(&req)?;
 
-        log::info!("query requested to airplane: {:?}", ticket);
+        log::warn!("query requested to airplane: {:?}", ticket);
 
         // get the query session_state
         let session_state = QUERY_SESSION.state();

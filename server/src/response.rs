@@ -29,6 +29,7 @@ use itertools::Itertools;
 use serde_json::{json, Value};
 use tonic::{Response, Status};
 
+#[derive(Debug)]
 pub struct QueryResponse {
     pub records: Vec<RecordBatch>,
     pub fields: Vec<String>,

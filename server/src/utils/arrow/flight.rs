@@ -61,6 +61,7 @@ pub async fn run_do_get_rpc(
         ))?
         .0;
     let url = format!("{}:{}", url, im.flight_port);
+    log::warn!("ingestor gRPC url-\n{url}\n");
     let url = url
         .parse::<Uri>()
         .map_err(|_| Status::failed_precondition("Ingester metadata is courupted"))?;
@@ -68,8 +69,9 @@ pub async fn run_do_get_rpc(
         .connect()
         .await
         .map_err(|err| Status::failed_precondition(err.to_string()))?;
-
+    log::warn!("built channel");
     let client = FlightClient::new(channel);
+    log::warn!("built flightclient");
     let inn = client
         .into_inner()
         .accept_compressed(tonic::codec::CompressionEncoding::Gzip)
@@ -77,7 +79,7 @@ pub async fn run_do_get_rpc(
         .max_encoding_message_size(usize::MAX);
 
     let mut client = FlightClient::new_from_inner(inn);
-
+    log::warn!("built channel with inner");
     client.add_header("authorization", &im.token)?;
 
     let response = client
