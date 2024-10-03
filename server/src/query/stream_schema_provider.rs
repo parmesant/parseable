@@ -233,7 +233,6 @@ async fn collect_from_snapshot(
 fn partitioned_files(
     manifest_files: Vec<catalog::manifest::File>,
     table_schema: &Schema,
-    // target_partition: usize,
 ) -> (Vec<Vec<PartitionedFile>>, datafusion::common::Statistics) {
     let target_partition = num_cpus::get();
     let mut partitioned_files = Vec::from_iter((0..target_partition).map(|_| Vec::new()));
