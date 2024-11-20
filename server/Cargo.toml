@@ -32,8 +32,8 @@ actix-web-static-files = "4.0"
 mime = "0.3.17"
 
 ### panorama dependencies
-pyo3 = {version = "0.21.1", features = ["auto-initialize"]}
-arrow = { version = "53.0.0" , features = ["pyarrow"] }
+pyo3 = {version = "*", features = ["auto-initialize"]}
+arrow = { version = "*" , features = ["pyarrow"] }
  
 ### other dependencies
 anyhow = { version = "1.0", features = ["backtrace"] }

@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::handlers::http::panorama::{PanoramaFunction, PanoramaRequestBody};
 
-pub static PANORAMA_SESSION: Lazy<Panorama> = Lazy::new(Panorama::init);
+pub static PANORAMA_SESSION: Lazy<Result<Panorama, ()>> = Lazy::new(Panorama::init);
 
 // TODO: How to pass it around in LazyStatic? Then we can have one init method
 #[derive(Debug)]
@@ -108,19 +108,19 @@ impl FromPyObject<'_> for PanoramaRecord {
 }
 
 impl Panorama {
-    pub fn init() -> Self {
+    pub fn init() -> Result<Self, ()> {
         Python::with_gil(|py| {
             let panorama_module = PyModule::from_code_bound(
                 py,
-                &std::fs::read_to_string("../panorama/python_assets/panorama_module.py").unwrap(),
+                &std::fs::read_to_string("../panorama/python_assets/panorama_module.py").expect("Module not found"),
                 "panorama_module.py",
                 "panorama_module",
             )
-            .unwrap()
+            .expect("Module not found")
             .as_unbound()
             .clone();
 
-            Panorama { panorama_module }
+            Ok(Panorama { panorama_module })
         })
     }
     pub fn python_function(

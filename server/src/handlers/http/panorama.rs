@@ -156,8 +156,14 @@ pub async fn panorama_function(
         }
     }
 
-    let record =
-        Python::with_gil(|py| PANORAMA_SESSION.python_function(py, body, records, fields)).unwrap();
+    let record = if PANORAMA_SESSION.is_err() {
+        return Err(PanoramaError::NotSubscribedError);
+    } else {
+        Python::with_gil(|py| {
+            PANORAMA_SESSION.as_ref().unwrap().python_function(py, body, records, fields).unwrap()
+        })
+    };
+
     Ok(PanoramaResponseBody { record }.to_http())
 }
 
@@ -204,6 +210,8 @@ impl PanoramaRequestBody {
 
 #[derive(Debug, thiserror::Error)]
 pub enum PanoramaError {
+    #[error("Contact Parseable to subscribe to Panorama")]
+    NotSubscribedError,
     #[error("The provided prediction time range is invalid")]
     InvalidPredictionTime,
     #[error("The provided actual time range is invalid")]
