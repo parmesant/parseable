@@ -24,6 +24,7 @@ mod cli;
 mod event;
 pub mod handlers;
 pub mod hottier;
+pub mod kafka;
 mod livetail;
 mod metadata;
 pub mod metrics;
