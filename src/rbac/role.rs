@@ -36,6 +36,7 @@ pub enum Action {
     DeleteHotTierEnabled,
     PutAlert,
     GetAlert,
+    DeleteAlert,
     PutUser,
     ListUser,
     DeleteUser,
@@ -132,6 +133,9 @@ impl RoleBuilder {
                 | Action::ListFilter
                 | Action::CreateFilter
                 | Action::DeleteFilter
+                | Action::PutAlert
+                | Action::GetAlert
+                | Action::DeleteAlert
                 | Action::GetAnalytics => Permission::Unit(action),
                 Action::Ingest
                 | Action::GetSchema
@@ -139,8 +143,6 @@ impl RoleBuilder {
                 | Action::GetStats
                 | Action::GetRetention
                 | Action::PutRetention
-                | Action::PutAlert
-                | Action::GetAlert
                 | Action::All => Permission::Stream(action, self.stream.clone().unwrap()),
             };
             perms.push(perm);
@@ -218,6 +220,7 @@ pub mod model {
                 Action::DeleteHotTierEnabled,
                 Action::PutAlert,
                 Action::GetAlert,
+                Action::DeleteAlert,
                 Action::QueryLLM,
                 Action::CreateFilter,
                 Action::ListFilter,
@@ -246,6 +249,7 @@ pub mod model {
                 Action::PutRetention,
                 Action::PutAlert,
                 Action::GetAlert,
+                Action::DeleteAlert,
                 Action::GetRetention,
                 Action::PutHotTierEnabled,
                 Action::GetHotTierEnabled,
@@ -288,6 +292,7 @@ pub mod model {
                 Action::DeleteDashboard,
                 Action::GetStreamInfo,
                 Action::GetUserRoles,
+                Action::GetAlert,
             ],
             stream: None,
             tag: None,

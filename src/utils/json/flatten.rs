@@ -200,20 +200,6 @@ pub fn validate_time_partition(
     }
 }
 
-pub fn flatten_with_parent_prefix(
-    nested_value: Value,
-    prefix: &str,
-    separator: &str,
-) -> Result<Value, anyhow::Error> {
-    let mut map = Map::new();
-    if let Value::Object(nested_dict) = nested_value {
-        flatten_object(&mut map, Some(prefix), nested_dict, separator)?;
-    } else {
-        return Err(anyhow!("Must be an object"));
-    }
-    Ok(Value::Object(map))
-}
-
 pub fn flatten_object(
     map: &mut Map<String, Value>,
     parent_key: Option<&str>,

@@ -17,11 +17,13 @@
  */
 
 use crate::handlers::airplane;
+use crate::handlers::http::alerts::ALERTS;
+use crate::handlers::http::base_path;
+use crate::handlers::http::caching_removed;
 use crate::handlers::http::cluster::{self, init_cluster_metrics_schedular};
 use crate::handlers::http::logstream::create_internal_stream_if_not_exists;
 use crate::handlers::http::middleware::{DisAllowRootUser, RouteExt};
 use crate::handlers::http::{self, role};
-use crate::handlers::http::{base_path, caching_removed};
 use crate::handlers::http::{logstream, MAX_EVENT_PAYLOAD_SIZE};
 use crate::hottier::HotTierManager;
 use crate::rbac::role::Action;
@@ -94,8 +96,18 @@ impl ParseableServer for QueryServer {
         //create internal stream at server start
         create_internal_stream_if_not_exists().await?;
 
-        FILTERS.load().await?;
-        DASHBOARDS.load().await?;
+        if let Err(err) = FILTERS.load().await {
+            error!("{err}")
+        };
+
+        if let Err(err) = DASHBOARDS.load().await {
+            error!("{err}")
+        };
+
+        if let Err(err) = ALERTS.load().await {
+            error!("{err}")
+        };
+
         // track all parquet files already in the data directory
         storage::retention::load_retention_from_global();
 
@@ -280,21 +292,21 @@ impl QueryServer {
                                 .authorize_for_stream(Action::GetStreamInfo),
                         ),
                     )
-                    .service(
-                        web::resource("/alert")
-                            // PUT "/logstream/{logstream}/alert" ==> Set alert for given log stream
-                            .route(
-                                web::put()
-                                    .to(logstream::put_alert)
-                                    .authorize_for_stream(Action::PutAlert),
-                            )
-                            // GET "/logstream/{logstream}/alert" ==> Get alert for given log stream
-                            .route(
-                                web::get()
-                                    .to(logstream::get_alert)
-                                    .authorize_for_stream(Action::GetAlert),
-                            ),
-                    )
+                    // .service(
+                    //     web::resource("/alert")
+                    //         // PUT "/logstream/{logstream}/alert" ==> Set alert for given log stream
+                    //         .route(
+                    //             web::put()
+                    //                 .to(logstream::put_alert)
+                    //                 .authorize_for_stream(Action::PutAlert),
+                    //         )
+                    //         // GET "/logstream/{logstream}/alert" ==> Get alert for given log stream
+                    //         .route(
+                    //             web::get()
+                    //                 .to(logstream::get_alert)
+                    //                 .authorize_for_stream(Action::GetAlert),
+                    //         ),
+                    // )
                     .service(
                         // GET "/logstream/{logstream}/schema" ==> Get schema for given log stream
                         web::resource("/schema").route(
