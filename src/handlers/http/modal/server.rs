@@ -79,6 +79,7 @@ impl ParseableServer for Server {
                     .service(Self::get_llm_webscope())
                     .service(Self::get_oauth_webscope(oidc_client))
                     .service(Self::get_user_role_webscope())
+                    .service(Self::get_date_bin())
                     .service(Self::get_metrics_webscope()),
             )
             .service(Self::get_ingest_otel_factory())
@@ -264,6 +265,10 @@ impl Server {
                             .authorize(Action::CreateFilter),
                     ),
             )
+    }
+    pub fn get_date_bin() -> Resource {
+        web::resource("/datebin").route(web::post().to(query::get_date_bin).authorize(Action::Query)
+    )
     }
 
     // get the query factory
