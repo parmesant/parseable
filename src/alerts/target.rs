@@ -98,7 +98,7 @@ impl TargetConfigs {
     }
 }
 
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 #[serde(untagged)]
 pub enum Retry {
@@ -125,9 +125,19 @@ pub struct Target {
 }
 
 impl Target {
-    pub async fn validate(&self) {
+    pub async fn validate(&self) -> Result<(), AlertError> {
         // just check for liveness
         // what if the target is not live yet but is added by the user?
+        let targets = TARGETS.list().await?;
+        for target in targets {
+            if target.target == self.target
+                && target.timeout.interval == self.timeout.interval
+                && target.timeout.times == self.timeout.times
+            {
+                return Err(AlertError::DuplicateTargetConfig);
+            }
+        }
+        Ok(())
     }
 
     pub fn call(&self, context: Context) {

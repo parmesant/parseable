@@ -20,7 +20,7 @@ pub async fn post(
     Json(target): Json<Target>,
 ) -> Result<impl Responder, AlertError> {
     // should check for duplicacy and liveness (??)
-    target.validate().await;
+    target.validate().await?;
 
     let path = target_json_path(target.id);
 
@@ -64,8 +64,9 @@ pub async fn update(
 
     // esnure that the supplied target id is assigned to the target config
     target.id = target_id;
+
     // should check for duplicacy and liveness (??)
-    target.validate().await;
+    target.validate().await?;
 
     let path = target_json_path(target.id);
 
@@ -87,6 +88,11 @@ pub async fn delete(
     let target_id = target_id.into_inner();
 
     let target = TARGETS.delete(&target_id).await?;
+
+    let path = target_json_path(target.id);
+
+    let store = PARSEABLE.storage.get_object_store();
+    store.delete_object(&path).await?;
 
     Ok(web::Json(target))
 }
