@@ -61,6 +61,32 @@ pub struct RedirectAfterLogin {
     pub redirect: Url,
 }
 
+pub fn log_bearer(flow: &str, bearer: &Bearer, expires_in: &TimeDelta) {
+    tracing::warn!("bearer info for {flow} flow-");
+    tracing::warn!("access- {} ... {}", &bearer.access_token[0..10], {
+        let len = bearer.access_token.len();
+        if len > 10 {
+            &bearer.access_token[len - 10..]
+        } else {
+            &bearer.access_token[2..]
+        }
+    });
+    if let Some(expiry) = bearer.expires_in.as_ref() {
+        tracing::warn!("expiry- {expiry}");
+    }
+    if let Some(refresh) = bearer.refresh_token.as_ref() {
+        tracing::warn!("refresh- {} ... {}", &refresh[0..10], {
+            let len = refresh.len();
+            if len > 10 {
+                &refresh[len - 10..]
+            } else {
+                &refresh[2..]
+            }
+        });
+    }
+    tracing::warn!("Session Expires In- {expires_in:?}");
+}
+
 pub async fn login(
     req: HttpRequest,
     query: web::Query<RedirectAfterLogin>,
@@ -256,6 +282,7 @@ pub async fn reply_login(
     } else {
         EXPIRY_DURATION
     };
+    log_bearer("login", &bearer, &expires_in);
 
     let user = match (existing_user, final_roles) {
         (Some(user), roles) => update_user_if_changed(user, roles, user_info, bearer).await?,

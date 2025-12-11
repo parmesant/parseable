@@ -32,7 +32,8 @@ use futures_util::future::LocalBoxFuture;
 use crate::{
     handlers::{
         AUTHORIZATION_KEY, KINESIS_COMMON_ATTRIBUTES_KEY, LOG_SOURCE_KEY, LOG_SOURCE_KINESIS,
-        STREAM_NAME_HEADER_KEY, http::rbac::RBACError,
+        STREAM_NAME_HEADER_KEY,
+        http::{oidc::log_bearer, rbac::RBACError},
     },
     oidc::DiscoveredClient,
     option::Mode,
@@ -183,6 +184,7 @@ where
 
             // if session is expired, refresh token
             if sessions().is_session_expired(&key) {
+                tracing::warn!("session- {key:?} expired");
                 let oidc_client = match http_req.app_data::<Data<Option<DiscoveredClient>>>() {
                     Some(client) => {
                         let c = client.clone().into_inner();
@@ -208,13 +210,17 @@ where
                     };
 
                     if let Some(oauth_data) = bearer_to_refresh {
-                        let Ok(refreshed_token) = client
+                        let refreshed_token = match client
                             .refresh_token(&oauth_data, Some(PARSEABLE.options.scope.as_str()))
                             .await
-                        else {
-                            return Err(ErrorUnauthorized(
-                                "Your session has expired or is no longer valid. Please re-authenticate to access this resource.",
-                            ));
+                        {
+                            Ok(bearer) => bearer,
+                            Err(e) => {
+                                tracing::error!("client refresh_token call failed- {e}");
+                                return Err(ErrorUnauthorized(
+                                    "Your session has expired or is no longer valid. Please re-authenticate to access this resource.",
+                                ));
+                            }
                         };
 
                         let expires_in =
@@ -228,7 +234,9 @@ where
                             } else {
                                 EXPIRY_DURATION
                             };
-
+                        if let Some(bearer) = oauth_data.bearer.as_ref() {
+                            log_bearer("refresh", bearer, &expires_in);
+                        }
                         let user_roles = {
                             let mut users_guard = mut_users();
                             if let Some(user) = users_guard.get_mut(&userid) {
