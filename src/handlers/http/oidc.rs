@@ -108,6 +108,7 @@ pub async fn login(
         None => None,
     };
     let session_key = extract_session_key_from_req(&req).ok();
+    tracing::warn!("session_key- {session_key:?}");
     let (session_key, oidc_client) = match (session_key, oidc_client) {
         (None, None) => return Ok(redirect_no_oauth_setup(query.redirect.clone())),
         (None, Some(client)) => {
@@ -126,6 +127,7 @@ pub async fn login(
             return Err(OIDCError::Unauthorized);
         }
     }
+    tracing::warn!("User is authorized");
     match session_key {
         // We can exchange basic auth for session cookie
         SessionKey::BasicAuth { username, password } => match Users.get_user(&username) {
@@ -152,8 +154,10 @@ pub async fn login(
         // if it's a valid active session, just redirect back
         key @ SessionKey::SessionId(_) => {
             let resp = if Users.session_exists(&key) {
+                tracing::warn!("user session exists for key- {key:?}");
                 redirect_to_client(query.redirect.as_str(), None)
             } else {
+                tracing::warn!("user session does not exist for key- {key:?}");
                 Users.remove_session(&key);
                 if let Some(oidc_client) = oidc_client {
                     redirect_to_oidc(
@@ -203,10 +207,12 @@ pub async fn reply_login(
 ) -> Result<HttpResponse, OIDCError> {
     let oidc_client = req.app_data::<Data<Option<DiscoveredClient>>>().unwrap();
     let oidc_client = oidc_client.clone().into_inner().as_ref().clone().unwrap();
-    let Ok((mut claims, user_info, bearer)): Result<(Claims, Userinfo, Bearer), anyhow::Error> =
-        request_token(oidc_client, &login_query).await
-    else {
-        return Ok(HttpResponse::Unauthorized().finish());
+    let (mut claims, user_info, bearer) = match request_token(oidc_client, &login_query).await {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!("client refresh_token call failed during login- {e}");
+            return Ok(HttpResponse::Unauthorized().finish());
+        }
     };
     let username = user_info
         .name
@@ -356,9 +362,11 @@ fn redirect_to_oidc(
     });
     let mut url: String = auth_url.into();
     url.push_str("&access_type=offline&prompt=consent");
-    HttpResponse::TemporaryRedirect()
+    let res = HttpResponse::TemporaryRedirect()
         .insert_header((header::LOCATION, url))
-        .finish()
+        .finish();
+    tracing::warn!("response for redirect to oidc- {res:?}");
+    res
 }
 
 fn redirect_to_oidc_logout(mut logout_endpoint: Url, redirect: &Url) -> HttpResponse {
@@ -379,7 +387,9 @@ pub fn redirect_to_client(
         response.cookie(cookie);
     }
     response.insert_header((header::CACHE_CONTROL, "no-store"));
-    response.finish()
+    let response = response.finish();
+    tracing::warn!("response for redirect to client- {response:?}");
+    response
 }
 
 fn redirect_no_oauth_setup(mut url: Url) -> HttpResponse {
